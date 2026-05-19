@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% block page_title %}Billing / POS{% endblock %}
+{% block page_icon %}cash-register{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Side - Medicine Search -->
+    <div class="col-md-5">
+        <div class="card p-4">
+            <h6 class="fw-bold mb-3" style="color:#1a5c2a;">
+                <i class="fas fa-search me-2"></i>Search Medicine
+            </h6>
+            <input type="text" id="searchInput" class="form-control mb-3" 
+                   placeholder="Type medicine name...">
+            <div id="searchResults"></div>
+
+            <hr>
+            <div class="mb-2">
+                <label class="form-label fw-semibold">Selected Medicine</label>
+                <input type="text" id="selectedMedicine" class="form-control" readonly>
+                <input type="hidden" id="selectedId">
+                <input type="hidden" id="selectedPrice">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Quantity</label>
+                <input type="number" id="quantity" class="form-control" value="1" min="1">
+            </div>
+            <button onclick="addToBill()" class="btn btn-primary w-100">
+                <i class="fas fa-plus me-2"></i>Add to Bill
+            </button>
+        </div>
+    </div>
+
+    <!-- Right Side - Bill -->
+    <div class="col-md-7">
+        <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0" style="color:#1a5c2a;">
+                    <i class="fas fa-file-invoice me-2"></i>Current Bill
+                </h6>
+                <span class="badge bg-secondary">
+                    Cashier: {{ cashier }}
+                </span>
+            </div>
+
+            <table class="table table-sm">
+                <thead style="background:#1a5c2a; color:white;">
+                    <tr>
+                        <th class="py-2 px-3">Medicine</th>
+                        <th>Qty</th>
+                        <th>Rate</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="billItems">
+                    <tr id="emptyRow">
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            <i class="fas fa-receipt fa-2x mb-2 d-block"></i>
+                            No items added yet
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="d-flex justify-content-between align-items-center mt-3 p-3" 
+                 style="background:#e8f5e9; border-radius:10px;">
+                <h5 class="mb-0 fw-bold">Total Amount:</h5>
+                <h4 class="mb-0 fw-bold" style="color:#1a5c2a;">
+                    Rs. <span id="totalAmount">0.00</span>
+                </h4>
+            </div>
+
+            <div class="d-flex gap-3 mt-3">
+                <button onclick="generateBill()" class="btn btn-success flex-grow-1">
+                    <i class="fas fa-print me-2"></i>Generate Bill
+                </button>
+                <button onclick="clearBill()" class="btn btn-outline-danger">
+                    <i class="fas fa-times me-2"></i>Clear
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Medicines data from Django
+const medicines = [
+    {% for medicine in medicines %}
+    {
+        id: {{ medicine.pk }},
+        name: "{{ medicine.name }}",
+        price: {{ medicine.sell_price }},
+        stock: {{ medicine.quantity }}
+    },
+    {% endfor %}
+];
+
+let billItems = [];
+
+// Search
+document.getElementById('searchInput').addEventListener('input', function() {
+    const query = this.value.toLowerCase();
+    const results = medicines.filter(m => m.name.toLowerCase().includes(query));
+    const div = document.getElementById('searchResults');
+    
+    if (query === '' || results.length === 0) {
+        div.innerHTML = '';
+        return;
+    }
+    
+    div.innerHTML = results.map(m => `
+        <div class="p-2 mb-1 rounded cursor-pointer" 
+             style="background:#f8f9fa; cursor:pointer; border:1px solid #dee2e6;"
+             onmouseover="this.style.background='#e8f5e9'"
+             onmouseout="this.style.background='#f8f9fa'"
+             onclick="selectMedicine(${m.id}, '${m.name}', ${m.price}, ${m.stock})">
+            <strong>${m.name}</strong>
+            <span class="float-end text-success">Rs. ${m.price}</span>
+            <br><small class="text-muted">Stock: ${m.stock}</small>
+        </div>
+    `).join('');
+});
+
+function selectMedicine(id, name, price, stock) {
+    document.getElementById('selectedId').value = id;
+    document.getElementById('selectedMedicine').value = name + ' (Stock: ' + stock + ')';
+    document.getElementById('selectedPrice').value = price;
+    document.getElementById('searchResults').innerHTML = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('quantity').focus();
+}
+
+function addToBill() {
+    const id = document.getElementById('selectedId').value;
+    const name = document.getElementById('selectedMedicine').value;
+    const price = parseFloat(document.getElementById('selectedPrice').value);
+    const qty = parseInt(document.getElementById('quantity').value);
+
+    if (!id) { alert('Pehle medicine select karo!'); return; }
+    if (!qty || qty < 1) { alert('Quantity 1 ya zyada honi chahiye!'); return; }
+
+    const existing = billItems.find(i => i.id == id);
+    if (existing) {
+        existing.quantity += qty;
+        existing.total = existing.quantity * existing.price;
+    } else {
+        billItems.push({
+            id: parseInt(id),
+            name: name.split(' (Stock')[0],
+            quantity: qty,
+            price: price,
+            total: qty * price
+        });
+    }
+
+    updateBillTable();
+    document.getElementById('selectedId').value = '';
+    document.getElementById('selectedMedicine').value = '';
+    document.getElementById('selectedPrice').value = '';
+    document.getElementById('quantity').value = 1;
+}
+
+function removeItem(index) {
+    billItems.splice(index, 1);
+    updateBillTable();
+}
+
+function updateBillTable() {
+    const tbody = document.getElementById('billItems');
+    
+    if (billItems.length === 0) {
+        tbody.innerHTML = `
+            <tr id="emptyRow">
+                <td colspan="5" class="text-center py-4 text-muted">
+                    <i class="fas fa-receipt fa-2x mb-2 d-block"></i>
+                    No items added yet
+                </td>
+            </tr>`;
+        document.getElementById('totalAmount').textContent = '0.00';
+        return;
+    }
+
+    tbody.innerHTML = billItems.map((item, index) => `
+        <tr>
+            <td class="fw-semibold">${item.name}</td>
+            <td>${item.quantity}</td>
+            <td>Rs. ${item.price}</td>
+            <td>Rs. ${item.total.toFixed(2)}</td>
+            <td>
+                <button onclick="removeItem(${index})" 
+                        class="btn btn-danger btn-sm">
+                    <i class="fas fa-times"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+
+    const total = billItems.reduce((sum, item) => sum + item.total, 0);
+    document.getElementById('totalAmount').textContent = total.toFixed(2);
+}
+
+function generateBill() {
+    if (billItems.length === 0) {
+        alert('Bill mein koi item nahi hai!');
+        return;
+    }
+
+    const total = billItems.reduce((sum, item) => sum + item.total, 0);
+
+    fetch('/billing/generate/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ items: billItems, total: total })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('Bill Generate Ho Gaya! Invoice #' + data.invoice_id);
+            clearBill();
+        }
+    });
+}
+
+function clearBill() {
+    billItems = [];
+    updateBillTable();
+}
+</script>
+{% endblock %}

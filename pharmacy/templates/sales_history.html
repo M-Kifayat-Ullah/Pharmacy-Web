@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block page_title %}Sales History{% endblock %}
+{% block page_icon %}history{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold" style="color:#1a5c2a;">
+            <i class="fas fa-history me-2"></i>All Invoices
+        </h6>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead style="background:#1a5c2a; color:white;">
+                <tr>
+                    <th class="py-3 px-4">Invoice #</th>
+                    <th>Date & Time</th>
+                    <th>Cashier</th>
+                    <th>Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in invoices %}
+                <tr>
+                    <td class="px-4 fw-bold">#{{ invoice.invoice_number }}</td>
+                    <td>{{ invoice.date|date:"d M Y - h:i A" }}</td>
+                    <td>{{ invoice.cashier }}</td>
+                    <td class="fw-bold" style="color:#1a5c2a;">
+                        Rs. {{ invoice.total_amount }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center py-5 text-muted">
+                        <i class="fas fa-history fa-2x mb-2 d-block"></i>
+                        No invoices yet
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
